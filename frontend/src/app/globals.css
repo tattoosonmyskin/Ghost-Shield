@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Zero-Curvature Mandate */
+* { border-radius: 0px !important; }
+::-webkit-scrollbar { display: none; }
