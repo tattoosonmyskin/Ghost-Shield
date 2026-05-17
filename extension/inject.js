@@ -3,45 +3,62 @@
     
     const poison = () => (Math.random() > 0.5 ? 1 : -1);
 
-    // 1. Mask Basic Hardware Metrics
-    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
-    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    // Hard-coded hardware spec overrides (Verified successful in Run 5)
+    Object.defineProperty(navigator, 'hardwareConcurrency', { 
+        value: 4, configurable: false, enumerable: true, writable: false 
+    });
+    Object.defineProperty(navigator, 'deviceMemory', { 
+        value: 8, configurable: false, enumerable: true, writable: false 
+    });
 
-    // 2. Overwrite WebGL Parametric Footprint
+    // Immutable WebGL Vendor & Renderer Overrides
     const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-        if (parameter === 37445) return "Intel Open Source Technology Center";
-        if (parameter === 37446) return "Mesa DRI Intel(R) UHD Graphics (ADL GT2)";
-        return originalGetParameter.apply(this, arguments);
-    };
+    Object.defineProperty(WebGLRenderingContext.prototype, 'getParameter', {
+        value: function(parameter) {
+            if (parameter === 37445) return "Intel Open Source Technology Center";
+            if (parameter === 37446) return "Mesa DRI Intel(R) UHD Graphics (ADL GT2)";
+            return originalGetParameter.apply(this, arguments);
+        },
+        configurable: false, writable: false
+    });
 
-    // 3. Close the WebGL Canvas Leak (Intercepting readPixels texture extraction)
+    // Close the toDataURL Leak via Immutable Descriptors
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+        value: function() {
+            const ctx = this.getContext('2d');
+            if (ctx) {
+                const shift = ctx.getImageData(0, 0, 1, 1);
+                shift.data[0] = shift.data[0] ^ 1;
+                ctx.putImageData(shift, 0, 0);
+            }
+            return originalToDataURL.apply(this, arguments);
+        },
+        configurable: false, writable: false
+    });
+
+    // Close the WebGL ReadPixels Texture leak path
     const originalReadPixels = WebGLRenderingContext.prototype.readPixels;
-    WebGLRenderingContext.prototype.readPixels = function(x, y, width, height, format, type, pixels) {
-        originalReadPixels.apply(this, arguments);
-        if (pixels && pixels.length > 0) {
-            // Inject low-frequency noise directly into the WebGL buffer array
-            pixels[0] = pixels[0] ^ 1; 
-        }
-    };
+    Object.defineProperty(WebGLRenderingContext.prototype, 'readPixels', {
+        value: function(x, y, width, height, format, type, pixels) {
+            originalReadPixels.apply(this, arguments);
+            if (pixels && pixels.length > 0) {
+                pixels[0] = pixels[0] ^ 1;
+            }
+        },
+        configurable: false, writable: false
+    });
 
-    // 4. Close the 2D Canvas Leak (Intercepting putImageData tracking routines)
-    const originalPutImageData = CanvasRenderingContext2D.prototype.putImageData;
-    CanvasRenderingContext2D.prototype.putImageData = function(imageData, dx, dy) {
-        if (imageData && imageData.data.length > 0) {
-            // Jitter the pixel data array before it renders to the screen
-            imageData.data[0] = imageData.data[0] ^ poison();
-        }
-        return originalPutImageData.apply(this, arguments);
-    };
-
-    // 5. Secure AudioContext Frequency Responses
+    // Immutable AudioContext Filter (Verified successful in Run 4 & 5)
     const originalGetChannelData = AudioBuffer.prototype.getChannelData;
-    AudioBuffer.prototype.getChannelData = function() {
-        const data = originalGetChannelData.apply(this, arguments);
-        for (let i = 0; i < data.length; i += 100) {
-            data[i] += (Math.random() - 0.5) * 1e-7;
-        }
-        return data;
-    };
+    Object.defineProperty(AudioBuffer.prototype, 'getChannelData', {
+        value: function() {
+            const data = originalGetChannelData.apply(this, arguments);
+            for (let i = 0; i < data.length; i += 100) {
+                data[i] += (Math.random() - 0.5) * 1e-7;
+            }
+            return data;
+        },
+        configurable: false, writable: false
+    });
 })();
